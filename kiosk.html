@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mambakery — Kiosk สแกนเข้างาน</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&family=Chakra+Petch:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="js/api-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:  #00e5a0;
+      --green2: #00b87a;
+      --amber:  #ffb830;
+      --amber2: #e09000;
+      --red:    #ff4d6d;
+      --bg:     #080d14;
+      --bg2:    #0e1622;
+      --card:   rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+      --text:   #e8f0fe;
+      --muted:  #4a5a72;
+      --font-display: 'Chakra Petch', sans-serif;
+      --font-body:    'Sarabun', sans-serif;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ── Background grain + glow ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 20% 80%, rgba(0,229,160,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 80% 20%, rgba(255,184,48,0.05) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ── Layout ── */
+    .kiosk-wrap {
+      position: relative; z-index: 1;
+      width: 100vw; height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      grid-template-columns: 1fr;
+    }
+
+    /* ── Header ── */
+    .kiosk-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 28px 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(8,13,20,0.9);
+      backdrop-filter: blur(12px);
+    }
+
+    .header-brand {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .brand-logo {
+      width: 44px; height: 44px; border-radius: 12px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+    }
+    .brand-logo-fallback {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: linear-gradient(135deg, #1a2535, #0e1622);
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+    }
+    .brand-name {
+      font-family: var(--font-display);
+      font-size: 1.1rem; font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--text);
+    }
+    .brand-sub {
+      font-size: 0.72rem; color: var(--muted);
+      margin-top: 1px; letter-spacing: 0.06em;
+    }
+
+    /* Clock */
+    .clock-wrap { text-align: right; }
+    .clock-time {
+      font-family: var(--font-display);
+      font-size: 2rem; font-weight: 700;
+      letter-spacing: 0.04em; line-height: 1;
+      color: var(--text);
+    }
+    .clock-date {
+      font-size: 0.78rem; color: var(--muted);
+      margin-top: 3px; letter-spacing: 0.04em;
+    }
+
+    /* Status pill */
+    .status-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; border-radius: 999px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    .status-dot.ready  { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse-dot 2s infinite; }
+    .status-dot.warn   { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+    .status-dot.error  { background: var(--red);   box-shadow: 0 0 6px var(--red);   }
+    #statusText { color: var(--text); }
+
+    /* ── Main area ── */
+    .kiosk-main {
+      display: flex; align-items: center; justify-content: center;
+      gap: 28px; padding: 20px 28px;
+      overflow: hidden;
+    }
+
+    /* Camera box */
+    .camera-box {
+      position: relative; flex-shrink: 0;
+      width: min(420px, 55vw);
+      aspect-ratio: 4/3;
+      border-radius: 24px; overflow: hidden;
+      background: #000;
+      border: 2px solid rgba(0,229,160,0.2);
+      box-shadow: 0 0 40px rgba(0,229,160,0.08);
+      transition: border-color 0.4s, box-shadow 0.4s;
+    }
+    .camera-box.mode-out {
+      border-color: rgba(255,184,48,0.25);
+      box-shadow: 0 0 40px rgba(255,184,48,0.08);
+    }
+    .camera-box.scanning {
+      border-color: rgba(0,229,160,0.5);
+      box-shadow: 0 0 60px rgba(0,229,160,0.18);
+    }
+
+    #video {
+      width: 100%; height: 100%; object-fit: cover;
+      transform: scaleX(-1); display: block;
+      opacity: 0; transition: opacity 0.5s;
+    }
+    #video.active { opacity: 1; }
+
+    /* Corner brackets */
+    .bracket { position: absolute; width: 36px; height: 36px; pointer-events: none; z-index: 5; }
+    .bracket-tl { top: 16px; left: 16px; border-top: 3px solid var(--green); border-left: 3px solid var(--green); border-radius: 4px 0 0 0; }
+    .bracket-tr { top: 16px; right: 16px; border-top: 3px solid var(--green); border-right: 3px solid var(--green); border-radius: 0 4px 0 0; }
+    .bracket-bl { bottom: 16px; left: 16px; border-bottom: 3px solid var(--green); border-left: 3px solid var(--green); border-radius: 0 0 0 4px; }
+    .bracket-br { bottom: 16px; right: 16px; border-bottom: 3px solid var(--green); border-right: 3px solid var(--green); border-radius: 0 0 4px 0; }
+    .mode-out .bracket-tl, .mode-out .bracket-tr,
+    .mode-out .bracket-bl, .mode-out .bracket-br {
+      border-color: var(--amber);
+    }
+
+    /* Scan line */
+    .scan-line {
+      display: none; position: absolute; left: 10%; right: 10%; height: 2px;
+      z-index: 6; animation: scanMove 2.2s ease-in-out infinite;
+    }
+    .scan-line.active { display: block; }
+    .scan-line.line-in  { background: linear-gradient(90deg, transparent, var(--green), transparent); box-shadow: 0 0 10px rgba(0,229,160,0.7); }
+    .scan-line.line-out { background: linear-gradient(90deg, transparent, var(--amber), transparent); box-shadow: 0 0 10px rgba(255,184,48,0.7); }
+
+    /* Overlay prompt */
+    .cam-overlay {
+      position: absolute; inset: 0; z-index: 8;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 12px;
+      background: rgba(8,13,20,0.7);
+      transition: opacity 0.4s;
+    }
+    .cam-overlay.hidden { opacity: 0; pointer-events: none; }
+    .cam-overlay-icon { font-size: 3.5rem; }
+    .cam-overlay-text { font-size: 1.1rem; color: var(--muted); text-align: center; }
+
+    /* Cam mode badge */
+    .cam-mode-badge {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      z-index: 10; white-space: nowrap;
+      padding: 5px 18px; border-radius: 999px;
+      font-size: 0.82rem; font-weight: 700; font-family: var(--font-display);
+      letter-spacing: 0.04em;
+      transition: all 0.3s;
+    }
+    .cam-mode-badge.in  { background: rgba(0,229,160,0.15); border: 1px solid rgba(0,229,160,0.35); color: var(--green); }
+    .cam-mode-badge.out { background: rgba(255,184,48,0.15); border: 1px solid rgba(255,184,48,0.35); color: var(--amber); }
+
+    /* ── Right panel ── */
+    .right-panel {
+      flex: 1; max-width: 340px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+
+    /* Mode toggle */
+    .mode-toggle {
+      display: flex; gap: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px; padding: 5px;
+    }
+    .mode-btn {
+      flex: 1; padding: 12px 8px;
+      border: none; border-radius: 12px;
+      font-family: var(--font-body); font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; transition: all 0.3s;
+      background: transparent; color: var(--muted);
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .mode-btn.active-in  { background: linear-gradient(135deg, var(--green2), #007a52); color: #000; box-shadow: 0 4px 18px rgba(0,184,122,0.35); }
+    .mode-btn.active-out { background: linear-gradient(135deg, var(--amber2), #b87000); color: #000; box-shadow: 0 4px 18px rgba(224,144,0,0.35); }
+
+    /* Instruction card */
+    .instr-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px; padding: 18px 20px;
+    }
+    .instr-title {
+      font-family: var(--font-display);
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em;
+      color: var(--muted); text-transform: uppercase; margin-bottom: 14px;
+    }
+    .instr-step {
+      display: flex; align-items: flex-start; gap: 12px;
+      margin-bottom: 12px; font-size: 0.88rem; color: #8a9ab5;
+    }
+    .instr-step:last-child { margin-bottom: 0; }
+    .instr-num {
+      width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(0,229,160,0.1); border: 1px solid rgba(0,229,160,0.25);
+      color: var(--green); font-size: 0.72rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Start button */
+    #btnStart {
+      display: none; width: 100%;
+      padding: 18px; border: none; border-radius: 16px;
+      font-family: var(--font-display); font-size: 1rem; font-weight: 700;
+      letter-spacing: 0.05em; cursor: pointer;
+      transition: all 0.3s; color: #000;
+    }
+    #btnStart.btn-in  { background: linear-gradient(135deg, var(--green), var(--green2)); box-shadow: 0 6px 30px rgba(0,229,160,0.35); animation: pulse-btn-in 2.5s ease-in-out infinite; }
+    #btnStart.btn-out { background: linear-gradient(135deg, var(--amber), var(--amber2)); box-shadow: 0 6px 30px rgba(255,184,48,0.35); animation: pulse-btn-out 2.5s ease-in-out infinite; }
+    #btnStart:hover { transform: translateY(-2px); animation: none; filter: brightness(1.1); }
+
+    /* Last scan log */
+    .last-scan {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 16px 20px;
+    }
+    .last-scan-title {
+      font-family: var(--font-display);
+      font-size: 0.72rem; letter-spacing: 0.1em;
+      color: var(--muted); text-transform: uppercase; margin-bottom: 10px;
+    }
+    .last-scan-entry {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 0.9rem;
+    }
+    .last-scan-avatar {
+      width: 38px; height: 38px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; font-weight: 800; flex-shrink: 0;
+      font-family: var(--font-display);
+    }
+    .avatar-in  { background: rgba(0,229,160,0.12); border: 1px solid rgba(0,229,160,0.3); color: var(--green); }
+    .avatar-out { background: rgba(255,184,48,0.12); border: 1px solid rgba(255,184,48,0.3); color: var(--amber); }
+    .last-scan-info { flex: 1; }
+    .last-scan-name { font-weight: 700; color: var(--text); }
+    .last-scan-meta { font-size: 0.78rem; color: var(--muted); margin-top: 1px; }
+    .last-scan-time { font-family: var(--font-display); font-size: 0.82rem; color: var(--muted); }
+    #lastScanEmpty { font-size: 0.85rem; color: var(--muted); }
+
+    /* ── Footer ── */
+    .kiosk-footer {
+      padding: 12px 28px;
+      border-top: 1px solid var(--border);
+      background: rgba(8,13,20,0.9);
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.75rem; color: var(--muted);
+    }
+    .footer-hint { display: flex; align-items: center; gap: 6px; }
+    .admin-link {
+      color: var(--muted); text-decoration: none;
+      padding: 4px 10px; border-radius: 6px;
+      border: 1px solid var(--border);
+      transition: all 0.2s; font-size: 0.72rem;
+    }
+    .admin-link:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+    /* ── Success overlay ── */
+    .success-overlay {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,229,160,0.08);
+      backdrop-filter: blur(4px);
+      align-items: center; justify-content: center;
+      animation: fadeInOut 3s ease forwards;
+    }
+    .success-overlay.out-mode { background: rgba(255,184,48,0.08); }
+    .success-overlay.active { display: flex; }
+
+    .success-card {
+      background: linear-gradient(160deg, #0e1a10, #0a1408);
+      border: 1px solid rgba(0,229,160,0.35);
+      border-radius: 28px; padding: 40px 44px;
+      text-align: center; max-width: 420px; width: 90%;
+      box-shadow: 0 0 80px rgba(0,229,160,0.12), 0 40px 80px rgba(0,0,0,0.5);
+      animation: successPop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .success-overlay.out-mode .success-card {
+      background: linear-gradient(160deg, #1a1608, #12100a);
+      border-color: rgba(255,184,48,0.35);
+      box-shadow: 0 0 80px rgba(255,184,48,0.12), 0 40px 80px rgba(0,0,0,0.5);
+    }
+
+    .success-icon { font-size: 4rem; margin-bottom: 16px; }
+    .success-type {
+      font-family: var(--font-display);
+      font-size: 0.8rem; letter-spacing: 0.12em; font-weight: 600;
+      text-transform: uppercase; margin-bottom: 12px;
+      padding: 4px 14px; border-radius: 999px; display: inline-block;
+    }
+    .stype-in  { background: rgba(0,229,160,0.12); color: var(--green); border: 1px solid rgba(0,229,160,0.3); }
+    .stype-out { background: rgba(255,184,48,0.12); color: var(--amber); border: 1px solid rgba(255,184,48,0.3); }
+    .success-name {
+      font-size: 2.2rem; font-weight: 800; margin-bottom: 6px;
+      font-family: var(--font-display); letter-spacing: 0.02em;
+    }
+    .sname-in  { color: var(--green); }
+    .sname-out { color: var(--amber); }
+    .success-time {
+      font-size: 1rem; color: #8a9ab5; margin-bottom: 20px;
+      font-family: var(--font-display);
+    }
+    .success-msg { font-size: 1.05rem; color: #8a9ab5; line-height: 1.6; }
+
+    /* Countdown ring */
+    .countdown-wrap {
+      margin-top: 24px; display: flex; align-items: center; justify-content: center; gap: 10px;
+      font-size: 0.82rem; color: var(--muted);
+    }
+    .countdown-num {
+      font-family: var(--font-display); font-size: 1.1rem; font-weight: 700;
+      color: var(--text); min-width: 20px;
+    }
+
+    /* ── Error toast ── */
+    .error-toast {
+      display: none; position: fixed;
+      bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: rgba(255,77,109,0.15); border: 1px solid rgba(255,77,109,0.4);
+      color: #ffa0b0; border-radius: 12px; padding: 12px 20px;
+      font-size: 0.88rem; z-index: 300; white-space: nowrap;
+      animation: slideUp 0.3s ease;
+    }
+    .error-toast.active { display: block; }
+
+    /* ── Keyframes ── */
+    @keyframes pulse-dot  { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    @keyframes scanMove   { 0%,100%{top:15%} 50%{top:85%} }
+    @keyframes pulse-btn-in  { 0%,100%{box-shadow:0 6px 30px rgba(0,229,160,0.35)} 50%{box-shadow:0 6px 50px rgba(0,229,160,0.65)} }
+    @keyframes pulse-btn-out { 0%,100%{box-shadow:0 6px 30px rgba(255,184,48,0.35)} 50%{box-shadow:0 6px 50px rgba(255,184,48,0.65)} }
+    @keyframes successPop { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
+    @keyframes fadeInOut  { 0%{opacity:0} 10%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
+    @keyframes slideUp    { from{transform:translateX(-50%) translateY(20px);opacity:0} to{transform:translateX(-50%) translateY(0);opacity:1} }
+  </style>
+</head>
+<body>
+<div class="kiosk-wrap">
+
+  <!-- Header -->
+  <header class="kiosk-header">
+    <div class="header-brand">
+      <img src="logo.png" class="brand-logo" alt="logo"
+        onerror="this.style.display='none';document.getElementById('logoFallback').style.display='flex'">
+      <div class="brand-logo-fallback" id="logoFallback" style="display:none">🍰</div>
+      <div>
+        <div class="brand-name">MAMBAKERY</div>
+        <div class="brand-sub">ATTENDANCE SYSTEM</div>
+      </div>
+    </div>
+
+    <div class="status-pill">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">กำลังโหลด...</span>
+    </div>
+
+    <div class="clock-wrap">
+      <div class="clock-time" id="clockTime">--:--:--</div>
+      <div class="clock-date" id="clockDate">—</div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="kiosk-main">
+
+    <!-- Camera -->
+    <div class="camera-box" id="cameraBox">
+      <video id="video" autoplay muted playsinline></video>
+
+      <!-- Brackets -->
+      <div class="bracket bracket-tl"></div>
+      <div class="bracket bracket-tr"></div>
+      <div class="bracket bracket-bl"></div>
+      <div class="bracket bracket-br"></div>
+
+      <!-- Scan line -->
+      <div class="scan-line line-in" id="scanLine"></div>
+
+      <!-- Overlay prompt -->
+      <div class="cam-overlay" id="camOverlay">
+        <div class="cam-overlay-icon">👁</div>
+        <div class="cam-overlay-text" id="camOverlayText">กำลังโหลดระบบ...</div>
+      </div>
+
+      <!-- Mode badge -->
+      <div class="cam-mode-badge in" id="camModeBadge">🟢 โหมดเข้างาน</div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="right-panel">
+
+      <!-- Mode toggle -->
+      <div class="mode-toggle">
+        <button class="mode-btn active-in" id="btnModeIn"  onclick="setMode('in')">✅ เข้างาน</button>
+        <button class="mode-btn"           id="btnModeOut" onclick="setMode('out')">🚪 ออกงาน</button>
+      </div>
+
+      <!-- Start button -->
+      <button id="btnStart" class="btn-in" onclick="startCamera()">
+        👁&nbsp; แตะเพื่อเริ่มสแกน
+      </button>
+
+      <!-- Instruction -->
+      <div class="instr-card">
+        <div class="instr-title">วิธีใช้งาน</div>
+        <div class="instr-step">
+          <div class="instr-num">1</div>
+          <div>เลือกโหมด <b>เข้างาน</b> หรือ <b>ออกงาน</b></div>
+        </div>
+        <div class="instr-step">
+          <div class="instr-num">2</div>
+          <div>กดปุ่ม <b>"แตะเพื่อเริ่มสแกน"</b></div>
+        </div>
+        <div class="instr-step">
+          <div class="instr-num">3</div>
+          <div>มองกล้องให้เห็นใบหน้าชัดเจน ระยะ 30–60 ซม.</div>
+        </div>
+        <div class="instr-step">
+          <div class="instr-num">4</div>
+          <div>ระบบจะบันทึกและรีเซ็ตอัตโนมัติ</div>
+        </div>
+      </div>
+
+      <!-- Last scan -->
+      <div class="last-scan">
+        <div class="last-scan-title">สแกนล่าสุด</div>
+        <div id="lastScanContent">
+          <div id="lastScanEmpty">ยังไม่มีการสแกน</div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="kiosk-footer">
+    <div class="footer-hint">
+      🍰 ร้านแหม่มเบเกอรี่ · ระบบบันทึกเวลาอัตโนมัติ
+    </div>
+    <div style="display:flex;gap:8px">
+      <a href="index.html" class="admin-link">⬅ หน้าหลัก</a>
+      <a href="login.html?next=register.html" class="admin-link">👤 Admin</a>
+    </div>
+  </footer>
+
+</div>
+
+<!-- Success overlay -->
+<div class="success-overlay" id="successOverlay">
+  <div class="success-card" id="successCard">
+    <div class="success-icon" id="successIcon">✅</div>
+    <div class="success-type stype-in" id="successType">เข้างาน</div>
+    <div class="success-name sname-in" id="successName">—</div>
+    <div class="success-time" id="successTime">—</div>
+    <div class="success-msg" id="successMsg">บันทึกเรียบร้อยแล้ว 🙏</div>
+    <div class="countdown-wrap">
+      <span>รีเซ็ตใน</span>
+      <span class="countdown-num" id="countdownNum">4</span>
+      <span>วินาที</span>
+    </div>
+  </div>
+</div>
+
+<!-- Error toast -->
+<div class="error-toast" id="errorToast"></div>
+
+<!-- Audio beep -->
+<audio id="beepOk"   src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFhYqKioeEgHt2cGhgVkpANy0kGg8GAAAABg8aJC0zQEpWYGhwdnt/goWKioqFgoSHioqKh4SCfndvcmlgUEE0Ji4ZDgAAAA4ZJi4zQVBgaXByd3uChIqKioWChIeLioqHhIJ9dnBpcF9PST0vJRkOAAAADhlJNS8lGg8AAAAPGiUvPUlXYGhxd3uChIqKioWChIeLioqHhIJ9dnBpcF9PST0v" preload="auto"></audio>
+<audio id="beepFail" src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFhYqKioeEgHt2cGhgVkpANy0kGg8GAAAABg8aJC0zQEpWYGhwdnt/goWKioqFgoSHioqKh4SCfndvcmlgUEE0Ji4ZDgAAAA4ZJi4zQVBgaXByd3uChIqKioWChIeLioqHhIJ9dnBpcF9PST0vJRkOAAAADhlJNS8lGg8AAAAPGiUvPUlXYGhxd3uChIqKioWChIeLioqHhIJ9dnBpcF9PST0v" preload="auto"></audio>
+
+<script>
+  const API_URL = localStorage.getItem('gasApiUrl') || (typeof GAS_API_URL !== 'undefined' ? GAS_API_URL : '');
+  const THRESHOLD = 0.45;
+
+  let knownFaces   = [];
+  let scanInterval = null;
+  let currentMode  = 'in';
+  let currentLat   = null;
+  let currentLng   = null;
+  let isProcessing = false;
+  let countdownTimer = null;
+
+  // ── Clock ─────────────────────────────────────────────────────
+  const THAI_MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const THAI_DAYS   = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('clockTime').textContent = h + ':' + m + ':' + s;
+
+    const day = THAI_DAYS[now.getDay()];
+    const d   = now.getDate();
+    const mo  = THAI_MONTHS[now.getMonth()];
+    const yr  = now.getFullYear() + 543;
+    document.getElementById('clockDate').textContent = day + ' ' + d + ' ' + mo + ' ' + yr;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // ── Status helpers ────────────────────────────────────────────
+  function setStatus(text, type) {
+    document.getElementById('statusText').textContent = text;
+    const dot = document.getElementById('statusDot');
+    dot.className = 'status-dot ' + (type || '');
+  }
+  function setCamOverlay(text, hide) {
+    const el = document.getElementById('camOverlay');
+    document.getElementById('camOverlayText').textContent = text;
+    el.classList.toggle('hidden', !!hide);
+  }
+
+  // ── Init ──────────────────────────────────────────────────────
+  if (!API_URL || API_URL.includes('YOUR_SCRIPT_ID')) {
+    setStatus('ยังไม่ได้ตั้งค่า API', 'error');
+    setCamOverlay('ยังไม่ได้ตั้งค่า API — ไปที่ config.html');
+  } else {
+    window.addEventListener('load', init);
+  }
+
+  async function init() {
+    setStatus('ตรวจสอบ GPS...', '');
+    await checkGPS();
+  }
+
+  // ── GPS ───────────────────────────────────────────────────────
+  function checkGPS() {
+    return new Promise(resolve => {
+      if (!navigator.geolocation) { loadModels(); resolve(); return; }
+      navigator.geolocation.getCurrentPosition(async pos => {
+        currentLat = pos.coords.latitude;
+        currentLng = pos.coords.longitude;
+        try {
+          const cfg = await fetch(API_URL + '?action=getConfig').then(r => r.json());
+          if (!cfg.lat || !cfg.lng || cfg.radius == 0) { loadModels(); resolve(); return; }
+          const dist = haversine(currentLat, currentLng, cfg.lat, cfg.lng);
+          if (dist <= cfg.radius) { loadModels(); }
+          else {
+            setStatus('นอกพื้นที่', 'error');
+            setCamOverlay('⛔ คุณอยู่นอกพื้นที่ที่อนุญาต');
+          }
+        } catch(e) { loadModels(); }
+        resolve();
+      }, () => { loadModels(); resolve(); });
+    });
+  }
+
+  // ── Load face-api models ──────────────────────────────────────
+  async function loadModels() {
+    setStatus('โหลด AI Model...', '');
+    setCamOverlay('กำลังโหลด AI...');
+    const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+    try {
+      await Promise.all([
+        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+      ]);
+      loadFaceDB();
+    } catch(e) {
+      setStatus('โหลด AI ล้มเหลว', 'error');
+      setCamOverlay('โหลด AI ล้มเหลว: ' + e.message);
+    }
+  }
+
+  async function loadFaceDB() {
+    setStatus('โหลดข้อมูลพนักงาน...', '');
+    setCamOverlay('โหลดข้อมูลพนักงาน...');
+    try {
+      const data = await fetch(API_URL + '?action=getKnownFaces').then(r => r.json());
+      if (!data || !data.length) {
+        setStatus('ไม่พบข้อมูลพนักงาน', 'warn');
+        setCamOverlay('ไม่พบข้อมูลพนักงาน — ลงทะเบียนก่อน');
+        return;
+      }
+      knownFaces = data.map(u => ({ name: u.label, descriptor: new Float32Array(u.descriptor) }));
+      const cnt = new Set(knownFaces.map(f => f.name)).size;
+      setStatus('พร้อม · ' + cnt + ' คน', 'ready');
+      setCamOverlay('กดปุ่มเพื่อเริ่มสแกน');
+      document.getElementById('btnStart').style.display = 'block';
+    } catch(e) {
+      setStatus('เชื่อมต่อไม่ได้', 'error');
+      setCamOverlay('เชื่อมต่อ API ไม่ได้');
+    }
+  }
+
+  // ── Mode toggle ───────────────────────────────────────────────
+  function setMode(mode) {
+    if (isProcessing) return;
+    currentMode = mode;
+    stopCamera();
+    const isIn = mode === 'in';
+    document.getElementById('btnModeIn').className  = 'mode-btn' + (isIn  ? ' active-in'  : '');
+    document.getElementById('btnModeOut').className = 'mode-btn' + (!isIn ? ' active-out' : '');
+    const box   = document.getElementById('cameraBox');
+    const badge = document.getElementById('camModeBadge');
+    const sl    = document.getElementById('scanLine');
+    box.className   = 'camera-box' + (!isIn ? ' mode-out' : '');
+    badge.className = 'cam-mode-badge ' + mode;
+    badge.textContent = isIn ? '🟢 โหมดเข้างาน' : '🟡 โหมดออกงาน';
+    sl.className    = 'scan-line ' + (isIn ? 'line-in' : 'line-out');
+    const btn = document.getElementById('btnStart');
+    btn.className   = 'btn-' + mode;
+    btn.textContent = isIn ? '👁  แตะเพื่อสแกนเข้างาน' : '👁  แตะเพื่อสแกนออกงาน';
+    if (knownFaces.length > 0) btn.style.display = 'block';
+    setCamOverlay('กดปุ่มเพื่อเริ่มสแกน');
+  }
+
+  // ── Camera ────────────────────────────────────────────────────
+  function startCamera() {
+    const video = document.getElementById('video');
+    document.getElementById('btnStart').style.display = 'none';
+    setStatus('กำลังเปิดกล้อง...', '');
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width:{ ideal:1280 }, height:{ ideal:960 } } })
+      .then(stream => {
+        video.srcObject = stream;
+        video.classList.add('active');
+        setCamOverlay('', true);
+        document.getElementById('cameraBox').classList.add('scanning');
+        setStatus('กำลังสแกน...', 'ready');
+        document.getElementById('scanLine').classList.add('active');
+        startScanLoop();
+      })
+      .catch(err => {
+        setStatus('เปิดกล้องไม่ได้', 'error');
+        setCamOverlay('เปิดกล้องไม่ได้: ' + err.message);
+        document.getElementById('btnStart').style.display = 'block';
+      });
+  }
+
+  function stopCamera() {
+    const video = document.getElementById('video');
+    if (scanInterval) { clearInterval(scanInterval); scanInterval = null; }
+    if (video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
+    video.classList.remove('active');
+    document.getElementById('scanLine').classList.remove('active');
+    document.getElementById('cameraBox').classList.remove('scanning');
+    isProcessing = false;
+  }
+
+  // ── Scan loop ─────────────────────────────────────────────────
+  function startScanLoop() {
+    const video = document.getElementById('video');
+    if (scanInterval) clearInterval(scanInterval);
+    scanInterval = setInterval(async () => {
+      if (video.paused || video.ended || isProcessing) return;
+      const det = await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor();
+      if (!det) return;
+      const best = findBest(det.descriptor);
+      if (best.distance < THRESHOLD) {
+        isProcessing = true;
+        clearInterval(scanInterval); scanInterval = null;
+        document.getElementById('scanLine').classList.remove('active');
+        await logAttendance(best.name);
+      }
+    }, 500);
+  }
+
+  function findBest(desc) {
+    let best = { name: 'unknown', distance: 1 };
+    knownFaces.forEach(u => {
+      const d = faceapi.euclideanDistance(desc, u.descriptor);
+      if (d < best.distance) best = { name: u.name, distance: d };
+    });
+    return best;
+  }
+
+  // ── Log to GAS ────────────────────────────────────────────────
+  async function logAttendance(name) {
+    const type = currentMode === 'in' ? 'เข้างาน' : 'ออกงาน';
+    try {
+      const res  = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'logAttendance', name, lat: currentLat, lng: currentLng, type })
+      });
+      const data = await res.json();
+      if (data.success) {
+        playBeep('ok');
+        showSuccess(name, type, data.message);
+        addLastScan(name, type);
+      } else {
+        playBeep('fail');
+        showToast('บันทึกไม่สำเร็จ: ' + (data.message || ''));
+        resetKiosk();
+      }
+    } catch(e) {
+      playBeep('fail');
+      showToast('เชื่อมต่อไม่ได้');
+      resetKiosk();
+    }
+  }
+
+  // ── Success overlay ───────────────────────────────────────────
+  function showSuccess(name, type, msg) {
+    const isIn = type === 'เข้างาน';
+    const now  = new Date();
+    const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    const overlay  = document.getElementById('successOverlay');
+    const card     = document.getElementById('successCard');
+    overlay.className = 'success-overlay active' + (isIn ? '' : ' out-mode');
+    card.style.borderColor = isIn ? 'rgba(0,229,160,0.35)' : 'rgba(255,184,48,0.35)';
+
+    document.getElementById('successIcon').textContent = isIn ? '✅' : '🚪';
+    document.getElementById('successType').className   = 'success-type ' + (isIn ? 'stype-in' : 'stype-out');
+    document.getElementById('successType').textContent = type;
+    document.getElementById('successName').className   = 'success-name ' + (isIn ? 'sname-in' : 'sname-out');
+    document.getElementById('successName').textContent = name;
+    document.getElementById('successTime').textContent = '🕐 ' + timeStr + ' น.';
+    document.getElementById('successMsg').textContent  = msg || 'บันทึกเรียบร้อยแล้ว 🙏';
+
+    // Countdown
+    let count = 4;
+    document.getElementById('countdownNum').textContent = count;
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = setInterval(() => {
+      count--;
+      document.getElementById('countdownNum').textContent = count;
+      if (count <= 0) {
+        clearInterval(countdownTimer);
+        overlay.classList.remove('active');
+        resetKiosk();
+      }
+    }, 1000);
+  }
+
+  // ── Last scan log ─────────────────────────────────────────────
+  function addLastScan(name, type) {
+    const isIn = type === 'เข้างาน';
+    const now  = new Date();
+    const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+    const initial = name.charAt(0);
+
+    document.getElementById('lastScanEmpty') && (document.getElementById('lastScanEmpty').remove());
+    const content = document.getElementById('lastScanContent');
+    content.innerHTML = `
+      <div class="last-scan-entry">
+        <div class="last-scan-avatar ${isIn ? 'avatar-in' : 'avatar-out'}">${initial}</div>
+        <div class="last-scan-info">
+          <div class="last-scan-name">${name}</div>
+          <div class="last-scan-meta">${type}</div>
+        </div>
+        <div class="last-scan-time">${timeStr}</div>
+      </div>`;
+  }
+
+  // ── Reset ─────────────────────────────────────────────────────
+  function resetKiosk() {
+    stopCamera();
+    setStatus('พร้อม · ' + new Set(knownFaces.map(f => f.name)).size + ' คน', 'ready');
+    setCamOverlay('กดปุ่มเพื่อเริ่มสแกน');
+    const btn = document.getElementById('btnStart');
+    btn.style.display = 'block';
+    btn.className = 'btn-' + currentMode;
+  }
+
+  // ── Beep ──────────────────────────────────────────────────────
+  function playBeep(type) {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    if (type === 'ok') {
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
+    } else {
+      osc.frequency.setValueAtTime(300, ctx.currentTime);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3);
+    }
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────
+  function showToast(msg) {
+    const el = document.getElementById('errorToast');
+    el.textContent = '❌ ' + msg;
+    el.classList.add('active');
+    setTimeout(() => el.classList.remove('active'), 3000);
+  }
+
+  // ── Haversine ─────────────────────────────────────────────────
+  function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+</script>
+</body>
+</html>
