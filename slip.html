@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>สลิปเงินเดือน — แหม่มเบเกอรี่</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Sarabun',sans-serif;background:#f0f0f0;min-height:100vh;
+      padding:24px 16px;display:flex;flex-direction:column;align-items:center}
+
+    /* Print controls (hidden when printing) */
+    .print-bar{display:flex;gap:10px;margin-bottom:20px;align-items:center;flex-wrap:wrap}
+    .btn-print{background:#6366f1;color:#fff;border:none;border-radius:10px;
+      padding:10px 22px;font-family:'Sarabun',sans-serif;font-size:15px;
+      font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px}
+    .btn-print:hover{background:#4f46e5}
+    .btn-back{background:transparent;color:#6b7280;border:1px solid #d1d5db;
+      border-radius:10px;padding:10px 18px;font-family:'Sarabun',sans-serif;
+      font-size:15px;font-weight:600;cursor:pointer;text-decoration:none;
+      display:inline-flex;align-items:center;gap:6px}
+    .btn-back:hover{background:#f9fafb}
+
+    /* Slip card */
+    .slip{background:#fff;border-radius:16px;width:100%;max-width:480px;
+      box-shadow:0 4px 24px rgba(0,0,0,.12);overflow:hidden}
+
+    /* Header */
+    .slip-header{background:linear-gradient(135deg,#1a0d2e,#0f0f23);
+      color:#fff;padding:22px 24px;text-align:center}
+    .slip-logo{width:60px;height:60px;border-radius:14px;object-fit:cover;
+      margin-bottom:10px;display:block;margin-left:auto;margin-right:auto}
+    .slip-logo-fallback{font-size:40px;display:block;margin-bottom:8px}
+    .slip-shop{font-size:1.2em;font-weight:700;color:#f0abfc;margin-bottom:2px}
+    .slip-title{font-size:.82em;color:#94a3b8;letter-spacing:.05em}
+
+    /* Status banner */
+    .slip-status{padding:8px 16px;text-align:center;font-size:.8em;font-weight:700;letter-spacing:.04em}
+    .status-confirmed{background:#d1fae5;color:#065f46}
+    .status-draft{background:#fef3c7;color:#92400e}
+
+    /* Period info */
+    .slip-period{background:#f8fafc;padding:14px 24px;
+      display:flex;justify-content:space-between;align-items:center;
+      border-bottom:2px solid #e2e8f0}
+    .period-label{font-size:.75em;color:#64748b;font-weight:600}
+    .period-value{font-size:.95em;font-weight:700;color:#1e293b}
+
+    /* Employee info */
+    .slip-emp{padding:16px 24px;border-bottom:1px solid #f1f5f9;
+      display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .emp-field{display:flex;flex-direction:column;gap:2px}
+    .ef-label{font-size:.72em;color:#94a3b8;font-weight:600;letter-spacing:.04em}
+    .ef-value{font-size:.9em;font-weight:700;color:#1e293b}
+    .ef-value.big{font-size:1.05em}
+    .type-chip{display:inline-flex;padding:2px 8px;border-radius:6px;font-size:.72em;font-weight:700}
+    .monthly-chip{background:#ede9fe;color:#5b21b6}
+    .daily-chip{background:#fef3c7;color:#92400e}
+
+    /* Sections */
+    .slip-section{padding:14px 24px}
+    .section-title{font-size:.72em;font-weight:700;color:#64748b;letter-spacing:.06em;
+      text-transform:uppercase;padding-bottom:8px;margin-bottom:4px;
+      border-bottom:1px solid #f1f5f9}
+    .slip-row{display:flex;justify-content:space-between;align-items:center;
+      padding:5px 0;font-size:.88em}
+    .slip-row .label{color:#475569}
+    .slip-row .amount{font-weight:600;color:#1e293b}
+    .slip-row .amount.zero{color:#cbd5e1}
+    .slip-row .amount.deduct{color:#ef4444}
+    .subtotal-row{display:flex;justify-content:space-between;align-items:center;
+      padding:8px 12px;background:#f8fafc;border-radius:8px;margin-top:6px;font-size:.9em}
+    .subtotal-row .label{font-weight:700;color:#475569}
+    .subtotal-row .amount{font-weight:700;color:#1e293b}
+
+    /* Divider */
+    .divider{border:none;border-top:1px dashed #e2e8f0;margin:4px 0}
+
+    /* Net pay */
+    .net-pay-box{background:linear-gradient(135deg,#f0fdf4,#dcfce7);
+      border:2px solid #86efac;border-radius:12px;padding:16px 24px;
+      margin:0 24px 20px;display:flex;justify-content:space-between;align-items:center}
+    .net-label{font-size:1em;font-weight:700;color:#166534}
+    .net-amount{font-size:1.6em;font-weight:700;color:#15803d}
+
+    /* Loan / vacation info */
+    .info-chips{display:flex;gap:8px;flex-wrap:wrap;padding:0 24px 16px}
+    .info-chip{display:flex;align-items:center;gap:5px;
+      background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
+      padding:6px 12px;font-size:.8em;color:#475569}
+    .info-chip strong{color:#1e293b}
+
+    /* Footer */
+    .slip-footer{background:#f8fafc;padding:12px 24px;text-align:center;
+      font-size:.75em;color:#94a3b8;border-top:1px solid #e2e8f0}
+
+    @media print{
+      body{background:#fff;padding:0}
+      .print-bar{display:none}
+      .slip{box-shadow:none;border-radius:0;max-width:100%}
+    }
+  </style>
+</head>
+<body>
+
+<div class="print-bar">
+  <a href="javascript:history.back()" class="btn-back">← กลับ</a>
+  <button class="btn-print" onclick="window.print()">🖨️ พิมพ์ / บันทึก PDF</button>
+</div>
+
+<div class="slip" id="slip">
+
+  <!-- Header -->
+  <div class="slip-header">
+    <img src="logo.png" alt="แหม่มเบเกอรี่" class="slip-logo"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+    <span class="slip-logo-fallback" style="display:none">🍰</span>
+    <div class="slip-shop">ร้านแหม่มเบเกอรี่</div>
+    <div class="slip-title">PAYSLIP · สลิปเงินเดือน</div>
+  </div>
+
+  <!-- Status -->
+  <div class="slip-status" id="slipStatus"></div>
+
+  <!-- Period -->
+  <div class="slip-period">
+    <div><div class="period-label">งวดเงินเดือน</div><div class="period-value" id="slipPeriod">—</div></div>
+    <div style="text-align:right"><div class="period-label">ออก ณ วันที่</div><div class="period-value" id="slipDate">—</div></div>
+  </div>
+
+  <!-- Employee -->
+  <div class="slip-emp">
+    <div class="emp-field"><div class="ef-label">ชื่อพนักงาน</div><div class="ef-value big" id="slipName">—</div></div>
+    <div class="emp-field"><div class="ef-label">รหัส</div><div class="ef-value" id="slipEmpId">—</div></div>
+    <div class="emp-field"><div class="ef-label">ประเภท</div><div class="ef-value" id="slipType">—</div></div>
+    <div class="emp-field"><div class="ef-label">ฐานค่าจ้าง</div><div class="ef-value" id="slipBase">—</div></div>
+  </div>
+
+  <!-- Income -->
+  <div class="slip-section">
+    <div class="section-title">💵 รายรับ</div>
+    <div id="incomeRows"></div>
+    <div class="subtotal-row">
+      <div class="label">รวมรายรับ</div>
+      <div class="amount" id="slipSubTotal">0</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- Deductions -->
+  <div class="slip-section">
+    <div class="section-title">➖ รายการหัก</div>
+    <div id="deductRows"></div>
+    <div class="subtotal-row" style="background:#fff5f5">
+      <div class="label">รวมหัก</div>
+      <div class="amount deduct" id="slipTotalDeduct">0</div>
+    </div>
+  </div>
+
+  <!-- Net Pay -->
+  <div class="net-pay-box">
+    <div class="net-label">💰 ยอดสุทธิที่ได้รับ</div>
+    <div class="net-amount" id="slipNetPay">0</div>
+  </div>
+
+  <!-- Info chips -->
+  <div class="info-chips" id="infoChips"></div>
+
+  <!-- Footer -->
+  <div class="slip-footer">
+    🍰 ร้านแหม่มเบเกอรี่ · สลิปนี้ออกโดยระบบอัตโนมัติ<br>
+    <span id="footerConfirmed"></span>
+  </div>
+
+</div>
+
+<script>
+  const MONTHS_TH = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+  function thb(n) {
+    return (parseFloat(n)||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})+' บาท';
+  }
+
+  function row(label, amount, cls='') {
+    const isZero = !amount || parseFloat(amount)===0;
+    const amtClass = isZero ? 'zero' : cls;
+    return `<div class="slip-row"><div class="label">${label}</div><div class="amount ${amtClass}">${isZero?'—':thb(amount)}</div></div>`;
+  }
+
+  window.onload = function() {
+    const params = new URLSearchParams(window.location.search);
+    const period = params.get('period') || '';
+    const empId  = params.get('empId') || '';
+    const pDisp  = params.get('periodDisplay') || period;
+    const dataStr = params.get('data');
+
+    if (!dataStr) {
+      document.getElementById('slip').innerHTML = '<div style="padding:40px;text-align:center;color:#6b7280">ไม่พบข้อมูล Slip</div>';
+      return;
+    }
+
+    const d = JSON.parse(decodeURIComponent(dataStr));
+    const isMonthly = d.type==='รายเดือน';
+    const today = new Date().toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'});
+
+    // Status
+    const statusEl = document.getElementById('slipStatus');
+    if (d.status==='confirmed') {
+      statusEl.className='slip-status status-confirmed';
+      statusEl.innerText='✅ ยืนยันแล้ว';
+    } else {
+      statusEl.className='slip-status status-draft';
+      statusEl.innerText='⚠️ ฉบับ Draft (ยังไม่ยืนยัน)';
+    }
+
+    // Period + Date
+    document.getElementById('slipPeriod').innerText = pDisp;
+    document.getElementById('slipDate').innerText   = today;
+
+    // Employee
+    document.getElementById('slipName').innerText  = d.name;
+    document.getElementById('slipEmpId').innerText = d.empId;
+    document.getElementById('slipType').innerHTML  = isMonthly
+      ? '<span class="type-chip monthly-chip">📅 รายเดือน</span>'
+      : '<span class="type-chip daily-chip">📆 รายวัน</span>';
+    document.getElementById('slipBase').innerText  = isMonthly
+      ? thb(d.baseAmount)+'/เดือน'
+      : thb(d.baseAmount)+'/วัน';
+
+    // Income rows
+    let inc = '';
+    if (isMonthly) {
+      inc += row('เงินเดือน', d.baseEarnings);
+    } else {
+      inc += row('ค่าจ้าง ('+d.workDays+' วัน × '+thb(d.baseAmount).replace(' บาท','')+')', d.baseEarnings);
+    }
+    if (d.ot)        inc += row('โอที (OT)', d.ot);
+    if (d.diligence) inc += row('เบี้ยขยัน', d.diligence);
+    if (isMonthly && d.meal) inc += row('ค่าอาหาร', d.meal);
+    document.getElementById('incomeRows').innerHTML = inc;
+    document.getElementById('slipSubTotal').innerText = thb(d.subTotal);
+
+    // Deduction rows
+    let ded = '';
+    if (d.advance)          ded += row('เบิกล่วงหน้า', d.advance, 'deduct');
+    if (d.loanDeduction)    ded += row('หักยืม', d.loanDeduction, 'deduct');
+    if (d.absentDays>0)     ded += row('หักขาดงาน ('+d.absentDays+' วัน)', d.absentDeduction, 'deduct');
+    if (d.lateCount>0)      ded += row('หักมาสาย ('+d.lateCount+' ครั้ง)', d.lateDeduction, 'deduct');
+    if (d.savingsDeduction) ded += row('หักเงินสะสม', d.savingsDeduction, 'deduct');
+    if (d.others)           ded += row('อื่นๆ'+(d.othersNote?' ('+d.othersNote+')':''), d.others, 'deduct');
+    if (!ded) ded = '<div style="text-align:center;color:#cbd5e1;font-size:.85em;padding:8px 0">ไม่มีรายการหัก</div>';
+    document.getElementById('deductRows').innerHTML = ded;
+    document.getElementById('slipTotalDeduct').innerText = thb(d.totalDeduction);
+
+    // Net pay
+    document.getElementById('slipNetPay').innerText = thb(d.netPay);
+
+    // Info chips
+    let chips = '';
+    if (d.loanRemaining>0) {
+      chips += `<div class="info-chip">💰 ยืมคงค้าง: <strong>${thb(d.loanRemaining)}</strong></div>`;
+    }
+    if (isMonthly) {
+      const vacRem = d.vacationRemaining !== undefined ? d.vacationRemaining : Math.max(0,3-(d.vacationUsedThisPeriod||0));
+      chips += `<div class="info-chip">🏖️ วันลาคงเหลือ: <strong>${vacRem} วัน</strong></div>`;
+    }
+    if (d.notes) {
+      chips += `<div class="info-chip">📝 ${d.notes}</div>`;
+    }
+    document.getElementById('infoChips').innerHTML = chips;
+
+    // Footer
+    if (d.confirmedAt) {
+      document.getElementById('footerConfirmed').innerText = 'ยืนยันเมื่อ: '+d.confirmedAt;
+    }
+  };
+</script>
+</body>
+</html>
