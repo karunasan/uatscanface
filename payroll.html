@@ -461,7 +461,7 @@
               <input class="edit-input" type="number" id="eAbsentDays" min="0" value="0" oninput="recalc()">
             </div>
             <div class="edit-row" id="eAbsentDeductRow">
-              <div><div class="edit-label">หักขาด</div><div class="edit-sub">รายวัน: 100/ครั้ง</div></div>
+              <div><div class="edit-label">หักขาด</div><div class="edit-sub">กรอกโดย Admin</div></div>
               <input class="edit-input" type="number" id="eAbsentDeduct" min="0" value="0" oninput="recalc()">
             </div>
           </div>
@@ -800,13 +800,7 @@ function recalc() {
   document.getElementById('eLoanAfter').value = loanAfter;
 
   const absentDays = parseFloat(document.getElementById('eAbsentDays').value)||0;
-  let absentDeduct;
-  if (isMonthly) {
-    absentDeduct = parseFloat(document.getElementById('eAbsentDeduct').value)||0;
-  } else {
-    absentDeduct = absentDays * 100;
-    document.getElementById('eAbsentDeduct').value = absentDeduct;
-  }
+  const absentDeduct = parseFloat(document.getElementById('eAbsentDeduct').value)||0;
 
   const lateCount  = parseFloat(document.getElementById('eLateCount').value)||0;
   const lateDeduct = Math.max(0, lateCount-1) * 50;
@@ -851,7 +845,7 @@ function saveEditModal() {
   const loanBefore   = parseFloat(document.getElementById('eLoanBefore').value)||0;
   const loanRemaining= Math.max(0,loanBefore-loanDeduct);
   const absentDays   = parseFloat(document.getElementById('eAbsentDays').value)||0;
-  const absentDeduct = isMonthly ? (parseFloat(document.getElementById('eAbsentDeduct').value)||0) : absentDays*100;
+  const absentDeduct = parseFloat(document.getElementById('eAbsentDeduct').value)||0;
   const lateCount    = parseFloat(document.getElementById('eLateCount').value)||0;
   const lateDeduct   = Math.max(0,lateCount-1)*50;
   const savings      = parseFloat(document.getElementById('eSavings').value)||0;
