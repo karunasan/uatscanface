@@ -586,7 +586,7 @@ async function doCalculate() {
     const url  = API_URL+'?action=calculatePayroll&period='+period+'&expectedDays='+expDays+'&workStart='+encodeURIComponent(wStart);
     const data = await fetch(url).then(r=>r.json());
     if (!data.success) return setNotice('❌ '+data.message, 'warn');
-    payrollRows = data.rows;
+    payrollRows = data.rows.sort((a,b) => String(a.empId||'').localeCompare(String(b.empId||''), undefined, {numeric:true}));
     renderPayrollTable();
     setNotice('✅ คำนวณเสร็จ งวด: '+periodDisplay(period)+' — ตรวจสอบและแก้ไขก่อนยืนยัน', 'info');
   } catch(e) {
@@ -600,7 +600,7 @@ async function loadDraft() {
   try {
     const data = await fetch(API_URL+'?action=getPayrollDraft&period='+period).then(r=>r.json());
     if (!data.rows || !data.rows.length) return setNotice('⚠️ ไม่พบ Draft สำหรับงวดนี้ กรุณาคำนวณก่อน', 'warn');
-    payrollRows = data.rows;
+    payrollRows = data.rows.sort((a,b) => String(a.empId||'').localeCompare(String(b.empId||''), undefined, {numeric:true}));
     renderPayrollTable();
     setNotice('📂 โหลด Draft งวด: '+periodDisplay(period)+' สำเร็จ', 'info');
   } catch(e) {
