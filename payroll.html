@@ -349,7 +349,7 @@
   <div class="tab-pane" id="pane-loans">
     <div class="card">
       <div class="card-title">➕ บันทึกเงินยืมใหม่</div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div style="display:none;gap:10px;margin-top:14px;flex-wrap:wrap" id="payrollActions">
         <div class="field-group">
           <div class="field-label">พนักงาน *</div>
           <select id="loanEmpSel" style="min-width:150px"><option value="">-- เลือกพนักงาน --</option></select>
@@ -611,7 +611,7 @@ async function loadDraft() {
 function renderPayrollTable() {
   const confirmed = payrollRows.every(r => r.status==='confirmed');
   document.getElementById('statRow').style.display = 'grid';
-  document.getElementById('payrollActions').style.removeProperty('display');
+  document.getElementById('payrollActions').style.display = 'flex';
 
   // Stats
   const totalIncome  = payrollRows.reduce((s,r) => s+(r.subTotal||0), 0);
