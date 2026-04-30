@@ -301,11 +301,12 @@
 
     <!-- Payroll table -->
     <div class="table-wrap" id="payrollTableWrap">
-      <div class="empty-state"><span class="empty-icon">📊</span>เลือกงวดแล้วกด "คำนวณอัตโนมัติ"</div>
+      <div class="empty-state"><span class="empty-icon">📊</span>เลือกงวดแล้วกด "คำนวณอัตโนมัติ" หรือ "โหลด Draft"</div>
     </div>
 
     <!-- Action buttons -->
-    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap" id="payrollActions" style="display:none">
+    <!-- แก้ไข: เอา style="display:none" ออก ใช้ JS control แทน -->
+    <div style="display:none;gap:10px;margin-top:14px;flex-wrap:wrap" id="payrollActions">
       <button class="btn btn-ghost" onclick="saveDraft()">💾 บันทึก Draft</button>
       <button class="btn btn-success" id="btnConfirm" onclick="doConfirm()">✅ ยืนยันเงินเดือน</button>
     </div>
@@ -349,7 +350,7 @@
   <div class="tab-pane" id="pane-loans">
     <div class="card">
       <div class="card-title">➕ บันทึกเงินยืมใหม่</div>
-      <div style="display:none;gap:10px;margin-top:14px;flex-wrap:wrap" id="payrollActions">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
         <div class="field-group">
           <div class="field-label">พนักงาน *</div>
           <select id="loanEmpSel" style="min-width:150px"><option value="">-- เลือกพนักงาน --</option></select>
@@ -594,22 +595,58 @@ async function doCalculate() {
   }
 }
 
+// ─── PAYROLL: Load Draft (แก้ไขแล้ว ─ ปัญหาหลัก) ─────────────────────────
 async function loadDraft() {
   const period = getPeriod();
+
+  // Debug log สำหรับตรวจสอบ
+  console.log('📂 [loadDraft] Loading draft for period:', period);
+  console.log('📂 [loadDraft] Current payrollRows length:', payrollRows.length);
+
   setNotice('⏳ กำลังโหลด Draft...', 'info');
+
   try {
-    const data = await fetch(API_URL+'?action=getPayrollDraft&period='+period).then(r=>r.json());
-    if (!data.rows || !data.rows.length) return setNotice('⚠️ ไม่พบ Draft สำหรับงวดนี้ กรุณาคำนวณก่อน', 'warn');
-    payrollRows = data.rows.sort((a,b) => String(a.empId||'').localeCompare(String(b.empId||''), undefined, {numeric:true}));
-    renderPayrollTable();
-    setNotice('📂 โหลด Draft งวด: '+periodDisplay(period)+' สำเร็จ', 'info');
+    const url = API_URL + '?action=getPayrollDraft&period=' + encodeURIComponent(period);
+    console.log('📡 [loadDraft] API URL:', url);
+
+    const response = await fetch(url);
+    console.log('📡 [loadDraft] Response status:', response.status);
+
+    const data = await response.json();
+    console.log('📡 [loadDraft] Response data:', data);
+
+    // กรณี 1: มี draft จริง ๆ → โหลดข้อมูล
+    if (data && data.rows && data.rows.length > 0) {
+      console.log('✅ [loadDraft] Found draft with', data.rows.length, 'rows');
+      payrollRows = data.rows.sort((a,b) => String(a.empId||'').localeCompare(String(b.empId||''), undefined, {numeric:true}));
+      renderPayrollTable();
+      setNotice('📂 โหลด Draft งวด: ' + periodDisplay(period) + ' สำเร็จ (' + data.rows.length + ' รายการ)', 'info');
+      return;
+    }
+
+    // กรณี 2: ไม่มี draft แต่มีข้อมูลจากการคำนวณอยู่แล้ว → ไม่ต้องแสดง error
+    if (payrollRows && payrollRows.length > 0) {
+      console.log('ℹ️ [loadDraft] No draft found, but payrollRows already has data');
+      setNotice('ℹ️ ไม่พบ Draft ที่เคยบันทึก แต่มีข้อมูลคำนวณอยู่แล้ว (' + payrollRows.length + ' รายการ)', 'info');
+      return;
+    }
+
+    // กรณี 3: ไม่มี draft และไม่มีข้อมูลเลย → แสดงคำแนะนำ
+    console.log('⚠️ [loadDraft] No draft found and no existing data');
+    setNotice('⚠️ ไม่พบ Draft สำหรับงวดนี้ กรุณาคำนวณก่อน', 'warn');
+
   } catch(e) {
-    setNotice('❌ '+e.message, 'warn');
+    console.error('❌ [loadDraft] Error:', e);
+    setNotice('❌ โหลด Draft ล้มเหลว: ' + e.message, 'warn');
   }
 }
 
+// ─── PAYROLL: Render Table (แก้ไขแล้ว ─ ปัญหาหลัก) ────────────────────────
 function renderPayrollTable() {
   const confirmed = payrollRows.every(r => r.status==='confirmed');
+
+  // 🔧 แก้ไข: ใช้ style.display = 'grid' / 'flex' แทน removeProperty
+  // เพราะ removeProperty ไม่ทำงานกับ inline style="display:none"
   document.getElementById('statRow').style.display = 'grid';
   document.getElementById('payrollActions').style.display = 'flex';
 
@@ -668,18 +705,46 @@ function renderPayrollTable() {
   document.getElementById('payrollTableWrap').innerHTML = html;
 }
 
-// ─── PAYROLL: Save draft ─────────────────────────────────────────────────────
+// ─── PAYROLL: Save draft (แก้ไขแล้ว ─ เพิ่ม debug) ─────────────────────────
 async function saveDraft() {
   if (!payrollRows.length) return alert('ไม่มีข้อมูลให้บันทึก');
   const tok = getAdminToken();
+
+  console.log('💾 [saveDraft] Saving', payrollRows.length, 'rows for period', getPeriod());
+
   setNotice('⏳ กำลังบันทึก Draft...', 'info');
+
   try {
-    const res  = await fetch(API_URL,{method:'POST',body:JSON.stringify({
-      action:'savePayrollDraft', period:getPeriod(), rows:payrollRows, adminToken:tok
-    })});
+    const payload = {
+      action: 'savePayrollDraft', 
+      period: getPeriod(), 
+      rows: payrollRows, 
+      adminToken: tok
+    };
+    console.log('📡 [saveDraft] Payload:', payload);
+
+    const res  = await fetch(API_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
     const data = await res.json();
-    setNotice(data.success ? '✅ '+data.message : '❌ '+data.message, data.success?'info':'warn');
-  } catch(e) { setNotice('❌ '+e.message,'warn'); }
+
+    console.log('📡 [saveDraft] Response:', data);
+
+    if (data.success) {
+      // อัพเดท status ของแถวเป็น draft ถ้ายังไม่มี status
+      payrollRows.forEach(r => {
+        if (!r.status) r.status = 'draft';
+      });
+      renderPayrollTable();
+      setNotice('✅ ' + data.message + ' (' + payrollRows.length + ' รายการ)', 'info');
+    } else {
+      setNotice('❌ ' + data.message, 'warn');
+    }
+  } catch(e) { 
+    console.error('❌ [saveDraft] Error:', e);
+    setNotice('❌ บันทึก Draft ล้มเหลว: ' + e.message, 'warn'); 
+  }
 }
 
 // ─── PAYROLL: Confirm ─────────────────────────────────────────────────────
